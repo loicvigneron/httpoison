@@ -440,6 +440,28 @@ defmodule HTTPoison.Base do
       headers: process_headers.(headers),
       body: process_response_body.(body)
     }
+    response = deflate_if_needed(response)
     {:ok, process_response.(response)}
   end
+
+  defp deflate_if_needed(response) do
+    body = case gzipped(response.headers) do
+      true ->
+        :zlib.gunzip(response.body)
+      _ ->
+        response.body
+    end
+    %{response | body: body}
+  end
+
+  defp gzipped(headers) when is_list(headers) do
+    Enum.any?(headers, fn (kv) ->
+      case kv do
+        {"Content-Encoding", "gzip"} -> true
+        _ -> false
+      end
+    end)
+  end
+
+  defp gzipped(_), do: false
 end
