@@ -85,6 +85,8 @@ defmodule HTTPoison.Base do
         HTTPoison.Base.default_process_url(url)
       end
 
+      defp process_response(response), do: response
+
       defp process_request_body(body), do: body
 
       defp process_response_body(body), do: body
@@ -159,7 +161,7 @@ defmodule HTTPoison.Base do
         url = process_url(to_string(url))
         body = process_request_body(body)
         headers = process_request_headers(headers)
-        HTTPoison.Base.request(__MODULE__, method, url, body, headers, options, &process_status_code/1, &process_headers/1, &process_response_body/1)
+        HTTPoison.Base.request(__MODULE__, method, url, body, headers, options, &process_status_code/1, &process_headers/1, &process_response_body/1,&process_response/1)
       end
 
       @doc """
@@ -416,15 +418,15 @@ defmodule HTTPoison.Base do
   end
 
   @doc false
-  def request(module, method, request_url, request_body, request_headers, options, process_status_code, process_headers, process_response_body) do
+  def request(module, method, request_url, request_body, request_headers, options, process_status_code, process_headers, process_response_body, process_response) do
     hn_options = build_hackney_options(module, options)
 
     case :hackney.request(method, request_url, request_headers,
                           request_body, hn_options) do
-      {:ok, status_code, headers} -> response(process_status_code, process_headers, process_response_body, status_code, headers, "")
+      {:ok, status_code, headers} -> response(process_status_code, process_headers, process_response_body, process_response, status_code, headers, "")
       {:ok, status_code, headers, client} ->
         case :hackney.body(client) do
-          {:ok, body} -> response(process_status_code, process_headers, process_response_body, status_code, headers, body)
+          {:ok, body} -> response(process_status_code, process_headers, process_response_body, process_response, status_code, headers, body)
           {:error, reason} -> {:error, %Error{reason: reason} }
         end
       {:ok, id} -> { :ok, %HTTPoison.AsyncResponse{ id: id } }
@@ -432,11 +434,12 @@ defmodule HTTPoison.Base do
      end
   end
 
-  defp response(process_status_code, process_headers, process_response_body, status_code, headers, body) do
-    {:ok, %Response {
+  defp response(process_status_code, process_headers, process_response_body, process_response, status_code, headers, body) do
+    response = %Response {
       status_code: process_status_code.(status_code),
       headers: process_headers.(headers),
       body: process_response_body.(body)
-    } }
+    }
+    {:ok, process_response.(response)}
   end
 end
